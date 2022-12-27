@@ -66,7 +66,7 @@ odoo.define('l10n_ar_pos_eticket.pos_model_ticket',function(require){
                                          method: 'search_read',
                                          args: [[['id', '=', account_move]], ['l10n_ar_afip_auth_code',
                                                                             'l10n_ar_afip_auth_code_due',
-                                                                            'l10n_ar_afip_barcode',
+                                                                            //'l10n_ar_afip_barcode',
                                                                             'l10n_ar_afip_qr_code',
                                                                             'invoice_date_due',
                                                                             'l10n_latam_document_type_id',
