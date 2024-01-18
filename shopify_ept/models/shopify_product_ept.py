@@ -6,7 +6,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from .. import shopify
 from ..shopify.pyactiveresource.connection import ClientError
@@ -49,6 +49,13 @@ class ShopifyProductProductEpt(models.Model):
     shopify_image_ids = fields.One2many("shopify.product.image.ept", "shopify_variant_id")
     taxable = fields.Boolean(default=True)
     last_stock_update_date = fields.Datetime(readonly=True, help="It is used in export stock process.")
+    fixed_stock_export = fields.Boolean(default=False)
+    fixed_stock_export_value = fields.Float(digits=0)
+
+    @api.onchange('fixed_stock_export_value')
+    def _onchange_fixed_stock_export_value(self):
+        if self.fixed_stock_export_value < 0:
+            raise UserError(_('There is no negative value allowed for the fixed export stock value.'))
 
     def toggle_active(self):
         """
@@ -296,7 +303,7 @@ class ShopifyProductProductEpt(models.Model):
         """This method is used to set product attribute vals while export/update products from Odoo to Shopify store.
         @change : pass lang_id on context by Nilam Kubavat for task id : 190111 at 19/05/2022
         """
-        if len(template.shopify_product_ids) > 1:
+        if template.product_tmpl_id.attribute_line_ids:
             attribute_list = []
             attribute_position = 1
             product_attribute_line_obj = self.env["product.template.attribute.line"]
@@ -379,7 +386,9 @@ class ShopifyProductProductEpt(models.Model):
             catch = ""
             while results:
                 page_info = ""
-                link = shopify.ShopifyResource.connection.response.headers.get("Link")
+                link = shopify.ShopifyResource.connection.response.headers.get(
+                    "Link") if shopify.ShopifyResource.connection.response.headers.get(
+                    "Link") else shopify.ShopifyResource.connection.response.headers.get("link")
                 for page_link in link.split(","):
                     if page_link.find("next") > 0:
                         page_info = page_link.split(";")[0].strip("<>").split("page_info=")[1]
@@ -840,7 +849,8 @@ class ShopifyProductProductEpt(models.Model):
         if not self._context.get('is_process_from_selected_product'):
             shopify_templates = self.check_available_products_in_shopify(instance)
             if shopify_templates:
-                shopify_products = shopify_templates.shopify_product_ids
+                shopify_products = shopify_templates.shopify_product_ids.filtered(
+                    lambda p: p.inventory_management == 'shopify')
 
         shopify_products = shopify_products.filtered(lambda l: l.product_id.id in product_ids)
         export_stock_data = []
@@ -868,8 +878,10 @@ class ShopifyProductProductEpt(models.Model):
                                       shopify_product.id, shopify_product.name, instance.name)
                         log_line_array = self.shopify_create_log(message, model_id, odoo_product, log_line_array)
                         continue
-
-                    quantity = self.compute_qty_for_export_stock(product_stock, shopify_product, odoo_product)
+                    if not shopify_product.fixed_stock_export:
+                        quantity = self.compute_qty_for_export_stock(product_stock, shopify_product, odoo_product)
+                    else:
+                        quantity = shopify_product.fixed_stock_export_value
 
                     export_stock_data.append({'product_name': shopify_product.default_code,
                                               'shopify_product_id': shopify_product,
@@ -1052,7 +1064,7 @@ class ShopifyProductProductEpt(models.Model):
                  ("shopify_instance_id", "=", instance.id)], limit=1)
             if shopify_product:
                 product_id = shopify_product.product_id
-                if product_id not in product_ids_list:
+                if product_id not in product_ids_list and product_id.detailed_type not in ['service', 'consu']:
                     stock_inventory_line = {
                         product_id.id: qty,
                     }
@@ -1073,7 +1085,9 @@ class ShopifyProductProductEpt(models.Model):
         while result:
             page_info = ""
             sum_inventory_list += result
-            link = shopify.ShopifyResource.connection.response.headers.get("Link")
+            link = shopify.ShopifyResource.connection.response.headers.get(
+                "Link") if shopify.ShopifyResource.connection.response.headers.get(
+                "Link") else shopify.ShopifyResource.connection.response.headers.get("link")
             if not link or not isinstance(link, str):
                 return sum_inventory_list
             for page_link in link.split(","):

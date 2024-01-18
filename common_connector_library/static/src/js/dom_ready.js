@@ -6,7 +6,7 @@ odoo.define('common_connector_library.InAppDomReady', function (require) {
     var Notification = require('common_connector_library.InAppNotificationWidget');
     var ajax = require('web.ajax');
     require('web.dom_ready');
-    if (hash.length > 0) {
+    if (hash.length > 0 && hash.match('menu')) {
         var param_string = hash.replace('#', '');
         var params = JSON.parse('{"' + decodeURI(param_string).replace(/"/g, '\\"').replace(/&/g, '","').replace(/=/g,'":"').replace(/\s/g,'') + '"}');
         var menuID = parseInt(params.menu_id)

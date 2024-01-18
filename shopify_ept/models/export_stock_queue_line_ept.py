@@ -130,12 +130,25 @@ class ShopifyOrderDataQueueLineEpt(models.Model):
                 except ClientError as error:
                     if hasattr(error,
                                "response") and error.response.code == 429 and error.response.msg == "Too Many Requests":
-                        time.sleep(int(float(error.response.headers.get('Retry-After', 5))))
-                        shopify.InventoryLevel.set(queue_line.location_id,
-                                                   queue_line.inventory_item_id,
-                                                   queue_line.quantity)
-                        queue_line.write({"state": "done"})
+                        try:
+                            time.sleep(int(float(error.response.headers.get('Retry-After', 5))))
+                            shopify.InventoryLevel.set(queue_line.location_id,
+                                                       queue_line.inventory_item_id,
+                                                       queue_line.quantity)
+                            queue_line.write({"state": "done"})
+                        except Exception as error:
+                            message = "Error while Export stock for Product ID: %s & Product Name: '%s' for instance:" \
+                                      "'%s'not found in Shopify store\nError: %s\n%s" % (
+                                          odoo_product.id, odoo_product.name, instance.name,
+                                          str(error.response.code) + " " + error.response.msg,
+                                          json.loads(error.response.body.decode()).get("errors")[0]
+                                      )
+                            log_line = common_log_line_obj.shopify_create_export_stock_log_line(message, model_id,
+                                                                                                queue_line,
+                                                                                                log_book_id)
+                            queue_line.write({"state": "failed"})
                         continue
+
                     elif error.response.code == 422 and error.response.msg == "Unprocessable Entity":
                         if json.loads(error.response.body.decode()).get("errors")[0] \
                                 == 'Inventory item does not have inventory tracking enabled':
@@ -166,6 +179,7 @@ class ShopifyOrderDataQueueLineEpt(models.Model):
                     queue_line.write({"state": "done"})
                 else:
                     queue_line.write({"state": "failed"})
+                self._cr.commit()
             if not log_book_id.log_lines:
                 log_book_id.unlink()
         return True

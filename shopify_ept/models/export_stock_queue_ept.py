@@ -101,9 +101,10 @@ class ShopifyExportStockQueueEpt(models.Model):
                 count = 0
                 export_stock_queue = self.shopify_create_export_stock_queue(instance)
                 message = "Export Stock Queue Created", export_stock_queue.name
-                self.env["bus.bus"]._sendone(self.env.user.partner_id, 'simple_notification',
-                                             {"title": "Shopify Connector",
-                                              "message": message, "sticky": False, "warning": True})
+                if self.env.context.get('queue_created_by'):
+                    self.env["bus.bus"]._sendone(self.env.user.partner_id, 'simple_notification',
+                                                 {"title": "Shopify Connector",
+                                                  "message": message, "sticky": False, "warning": True})
                 self._cr.commit()
                 _logger.info(message)
             self.shopify_create_export_stock_queue_line(data, instance, export_stock_queue)

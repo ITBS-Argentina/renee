@@ -32,8 +32,9 @@ class ShopifyProcessImportExport(models.TransientModel):
          ("import_customers", "Import Customers"),
          ("import_unshipped_orders", "Import Unshipped Orders"),
          ("import_shipped_orders", "Import Shipped Orders"),
+         ("import_buy_with_prime_orders", "Import Buy with Prime Orders"),
          ("import_cancel_orders", "Import Cancel Orders"),
-         ("import_orders_by_remote_ids", "Import Specific Order(s)"),
+         ("import_orders_by_remote_ids", "Import/Update Specific Order(s)"),
          ("update_order_status", "Export Shippment Information/Update Order Status"),
          ("export_stock", "Export Stock"),
          ("import_stock", "Import Stock"),
@@ -90,6 +91,8 @@ class ShopifyProcessImportExport(models.TransientModel):
     shopify_video_url = fields.Char('Video URL',
                                     help='URL of a video for showcasing by operations.')
     shopify_video_embed_code = fields.Html(compute="_compute_shopify_video_embed_code", sanitize=False)
+    is_import_draft_product = fields.Boolean(default=False, string='Import Draft products',
+                                             help="If you mark it, It will be import draft products.")
 
     @api.depends('shopify_video_url')
     def _compute_shopify_video_embed_code(self):
@@ -106,16 +109,18 @@ class ShopifyProcessImportExport(models.TransientModel):
 
         instance = self.shopify_instance_id
         if self.shopify_operation == "sync_product":
-            product_queue_ids = product_data_queue_obj.shopify_create_product_data_queue(
+            product_queue_ids = product_data_queue_obj.with_context(
+                queue_created_by="manual").shopify_create_product_data_queue(
                 instance, self.import_products_based_on_date, self.orders_from_date, self.orders_to_date,
-                self.skip_existing_product)
+                self.skip_existing_product, "", self.is_import_draft_product)
             if product_queue_ids:
                 queue_ids = product_queue_ids
                 action_name = "shopify_ept.action_shopify_product_data_queue"
                 form_view_name = "shopify_ept.product_synced_data_form_view_ept"
 
         elif self.shopify_operation == "sync_product_by_remote_ids":
-            product_queue_ids = product_data_queue_obj.shopify_create_product_data_queue(
+            product_queue_ids = product_data_queue_obj.with_context(
+                queue_created_by="manual").shopify_create_product_data_queue(
                 instance, skip_existing_product=self.skip_existing_product, template_ids=self.shopify_template_ids)
             if product_queue_ids:
                 queue_ids = product_queue_ids
@@ -141,7 +146,8 @@ class ShopifyProcessImportExport(models.TransientModel):
                 form_view_name = "shopify_ept.shopify_synced_customer_data_form_view_ept"
 
         elif self.shopify_operation == "import_unshipped_orders":
-            order_queues = order_date_queue_obj.shopify_create_order_data_queues(instance, self.orders_from_date,
+            order_queues = order_date_queue_obj.with_context(
+                queue_created_by="manual").shopify_create_order_data_queues(instance, self.orders_from_date,
                                                                                  self.orders_to_date,
                                                                                  order_type="unshipped")
             if order_queues:
@@ -150,10 +156,23 @@ class ShopifyProcessImportExport(models.TransientModel):
                 form_view_name = "shopify_ept.view_shopify_order_data_queue_ept_form"
 
         elif self.shopify_operation == "import_shipped_orders":
-            order_queues = order_date_queue_obj.shopify_create_order_data_queues(instance,
+            order_queues = order_date_queue_obj.with_context(
+                queue_created_by="manual").shopify_create_order_data_queues(instance,
                                                                                  self.orders_from_date,
                                                                                  self.orders_to_date,
                                                                                  order_type="shipped")
+            if order_queues:
+                queue_ids = order_queues
+                action_name = "shopify_ept.action_shopify_shipped_order_data_queue_ept"
+                form_view_name = "shopify_ept.view_shopify_order_data_queue_ept_form"
+
+        elif self.shopify_operation == "import_buy_with_prime_orders":
+            if not instance.import_buy_with_prime_shopify_order:
+                raise UserError(_('Import Buy with Prime Configuration is not Active'))
+            order_queues = order_date_queue_obj.with_context(
+                queue_created_by="manual").shopify_create_order_data_queues(instance, self.orders_from_date,
+                                                                                 self.orders_to_date,
+                                                                                 order_type="buy_with_prime")
             if order_queues:
                 queue_ids = order_queues
                 action_name = "shopify_ept.action_shopify_shipped_order_data_queue_ept"
@@ -164,11 +183,16 @@ class ShopifyProcessImportExport(models.TransientModel):
             sale_order_obj.import_shopify_cancel_order(instance, self.orders_from_date, self.orders_to_date)
 
         elif self.shopify_operation == "import_orders_by_remote_ids":
-            order_date_queue_obj.import_order_process_by_remote_ids(instance, self.shopify_order_ids)
+            order_queues = order_date_queue_obj.with_context(
+                queue_created_by="manual").import_order_process_by_remote_ids(instance, self.shopify_order_ids)
+            if order_queues:
+                queue_ids = order_queues
+                action_name = "shopify_ept.action_shopify_order_data_queue_ept"
+                form_view_name = "shopify_ept.view_shopify_order_data_queue_ept_form"
 
         elif self.shopify_operation == "export_stock":
             # self.update_stock_in_shopify(ctx={})
-            exprot_stock_queue_id = self.shopify_export_stock_queue(ctx={})
+            exprot_stock_queue_id = self.with_context(queue_created_by="manual").shopify_export_stock_queue(ctx={})
             if exprot_stock_queue_id:
                 queue_ids = exprot_stock_queue_id.ids
                 action_name = "shopify_ept.action_shopify_export_stock_queue"
@@ -201,7 +225,7 @@ class ShopifyProcessImportExport(models.TransientModel):
                 action_name = "shopify_ept.action_shopify_location_data"
                 form_view_name = "shopify_ept.shopify_synced_locations_data_form_view_ept"
 
-        if queue_ids and action_name and form_view_name:
+        if queue_ids and isinstance(queue_ids, list) and action_name and form_view_name:
             action = self.env.ref(action_name).sudo().read()[0]
             form_view = self.sudo().env.ref(form_view_name)
 
@@ -353,8 +377,10 @@ class ShopifyProcessImportExport(models.TransientModel):
                                      {"title": "Shopify Notification", "message": message, "sticky": False,
                                       "warning": True})
                 _logger.info(message)
-
-                customer_queue_list.append(customer_queue.id)
+                if not customer_queue.synced_customer_queue_line_ids:
+                    customer_queue.unlink()
+                else:
+                    customer_queue_list.append(customer_queue.id)
             self._cr.commit()
         return customer_queue_list
 
@@ -379,6 +405,8 @@ class ShopifyProcessImportExport(models.TransientModel):
         customer_queue_id.synced_customer_queue_line_ids.shopify_customer_data_queue_line_create(res, customer_queue_id)
         if len(customer_queue_id.synced_customer_queue_line_ids) == 50:
             customer_queue_id.synced_customer_queue_line_ids.sync_shopify_customer_into_odoo()
+        if not customer_queue_id.synced_customer_queue_line_ids:
+            customer_queue_id.unlink()
         return True
 
     def shopify_list_all_customer(self, result):
@@ -392,7 +420,9 @@ class ShopifyProcessImportExport(models.TransientModel):
         customer_queue_list = []
         while result:
             page_info = ""
-            link = shopify.ShopifyResource.connection.response.headers.get('Link')
+            link = shopify.ShopifyResource.connection.response.headers.get(
+                "Link") if shopify.ShopifyResource.connection.response.headers.get(
+                "Link") else shopify.ShopifyResource.connection.response.headers.get("link")
             if not link or not isinstance(link, str):
                 return customer_queue_list
             for page_link in link.split(','):
@@ -496,6 +526,11 @@ class ShopifyProcessImportExport(models.TransientModel):
 
         products = product_obj.get_products_based_on_movement_date_ept(last_update_date,
                                                                        instance.shopify_company_id)
+
+        # find shopify product which has Fixed Stock Export boolean is true
+        fixed_stock_products = self.find_fix_stock_export_product(instance)
+        products = products + fixed_stock_products
+
         if products:
             export_stock_queue = shopify_product_obj.export_stock_queue(instance, products)
             if export_stock_queue:
@@ -505,6 +540,22 @@ class ShopifyProcessImportExport(models.TransientModel):
             _logger.info("No products found to export stock from %s.....", last_update_date)
 
         return False
+
+    def find_fix_stock_export_product(self, instance):
+        """
+        This method is used for find shopify product which have fix export stock boolean is true.
+        @author: Yagnik Joshi @Emipro Technologies Pvt. Ltd on date 27 November 2023 .
+        Task_id:3816
+        """
+        result = []
+        shopify_variants_product_obj = self.env['shopify.product.product.ept']
+        shopify_products = shopify_variants_product_obj.search([
+            ('fixed_stock_export', '=', True),
+            ('shopify_instance_id', '=', instance.id)
+        ])
+
+        ids = shopify_products.product_id.ids
+        return list(set(ids))
 
     def shopify_selective_product_stock_export(self):
         """
@@ -610,6 +661,8 @@ class ShopifyProcessImportExport(models.TransientModel):
             elif self.shopify_operation == "import_cancel_orders":
                 self.orders_from_date = instance.last_cancel_order_import_date or False
                 self.shopify_check_running_schedulers('ir_cron_shopify_auto_import_cancel_order_instance_')
+            elif self.shopify_operation == "import_buy_with_prime_orders":
+                self.orders_from_date = instance.last_buy_with_prime_order_import_date or False
             elif self.shopify_operation == "sync_product":
                 self.orders_from_date = instance.shopify_last_date_product_import or False
             elif self.shopify_operation == 'update_order_status':

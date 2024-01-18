@@ -26,5 +26,8 @@ class StockPicking(models.Model):
         Task_id: 179263 - Analysis : Export order status
         """
         picking = self
-        self.env['sale.order'].update_order_status_in_shopify(self.shopify_instance_id, picking_ids=picking)
+        order_id = picking.sale_id if picking.sale_id else False
+
+        self.env['sale.order'].with_context(order_id=order_id).update_order_status_in_shopify(self.shopify_instance_id,
+                                                                                              picking_ids=picking)
         return True

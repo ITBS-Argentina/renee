@@ -106,7 +106,6 @@ class ShopifyProductDataQueueLineEpt(models.Model):
         if queue_id:
             shopify_instance = queue_id.shopify_instance_id
             if shopify_instance.active:
-                _logger.info("Instance %s is not active.", shopify_instance.name)
                 if queue_id.common_log_book_id:
                     log_book_id = queue_id.common_log_book_id
                 else:
@@ -136,7 +135,6 @@ class ShopifyProductDataQueueLineEpt(models.Model):
         """
         instance = self.shopify_instance_id
         if instance.active:
-            _logger.info("Instance %s is not active.", instance.name)
             instance.connect_in_shopify()
             if self.product_data_id:
                 result = shopify.Product().find(self.product_data_id)

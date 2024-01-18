@@ -153,7 +153,9 @@ class ShopifyPaymentReportEpt(models.Model):
         transactions_list = []
         catch = ""
         while result:
-            link = shopify.ShopifyResource.connection.response.headers.get("Link")
+            link = shopify.ShopifyResource.connection.response.headers.get(
+                "Link") if shopify.ShopifyResource.connection.response.headers.get(
+                "Link") else shopify.ShopifyResource.connection.response.headers.get("link")
             if not link or not isinstance(link, str):
                 return transactions_list
             page_info = ""
@@ -348,7 +350,7 @@ class ShopifyPaymentReportEpt(models.Model):
                     # We can not use shopify order reference here because it may create duplicate name,
                     # and name of journal entry should be unique per company. So here I have used transaction Id
                     bank_line_vals = {
-                        'name': transaction.transaction_id,
+                        # 'name': transaction.transaction_id,
                         'payment_ref': transaction.transaction_id,
                         'date': self.payout_date,
                         'amount': transaction.amount,
@@ -394,7 +396,7 @@ class ShopifyPaymentReportEpt(models.Model):
                     if order_id.name:
                         name = transaction.transaction_type + "_" + transaction.transaction_id
                 bank_line_vals = {
-                    'name': name or reference,
+                    # 'name': name or reference,
                     'payment_ref': reference,
                     'date': self.payout_date,
                     'partner_id': partner and partner.id,
@@ -449,6 +451,19 @@ class ShopifyPaymentReportEpt(models.Model):
             invoice_ids = order_id.invoice_ids.filtered(lambda x:
                                                         x.state == 'posted' and x.move_type == 'out_refund' and
                                                         x.amount_total == -transaction.amount)
+            if not invoice_ids:
+                shopify_instance = order_id.shopify_instance_id
+                shopify_instance.connect_in_shopify()
+                shopify_order = shopify.Order().find(order_id.shopify_order_id)
+                orders_data = shopify_order.to_dict()
+                shopify_order_status = orders_data.get("financial_status")
+                if shopify_order_status in ["refunded", "partially_refunded"] and orders_data.get("refunds"):
+                    created_by = ""
+                    order_id.create_shipped_order_refund(shopify_order_status, orders_data, order_id, created_by)
+                invoice_ids = order_id.invoice_ids.filtered(lambda x:
+                                                            x.state == 'posted' and x.move_type == 'out_refund' and
+                                                            x.amount_total == -transaction.amount)
+
             if not invoice_ids:
                 message = "In Shopify Payout, there is a Refund, but Refund amount is not matched for order %s in" \
                           "odoo" % (order_id.name or transaction.source_order_id)

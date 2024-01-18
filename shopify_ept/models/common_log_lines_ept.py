@@ -95,10 +95,11 @@ class CommonLogLineEpt(models.Model):
             date_deadline = datetime.strftime(
                 datetime.now() + timedelta(days=int(log_book.shopify_instance_id.shopify_date_deadline)), "%Y-%m-%d")
             model_id = self.get_model_id("shopify.payout.report.ept")
-            group_accountant = self.env.ref('account.group_account_user')
+            # group_accountant = self.env.ref('account.group_account_user')
+            user_ids = log_book.shopify_instance_id.shopify_payout_user_ids
 
             if note:
-                for user_id in group_accountant.users:
+                for user_id in user_ids:
                     mail_activity = mail_activity_obj.search(
                         [('res_model_id', '=', model_id), ('user_id', '=', user_id.id), ('note', '=', note),
                          ('activity_type_id', '=', activity_type_id)])

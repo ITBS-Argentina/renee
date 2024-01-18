@@ -31,8 +31,8 @@ class StockPicking(models.Model):
     def _compute_scheduled_date(self):
         for picking in self:
             carrier_id = picking.carrier_id
-            if carrier_id and carrier_id.on_time_shipping > 0.0:
-                order = picking.sale_id
+            order = picking.sale_id
+            if order and carrier_id and carrier_id.on_time_shipping > 0.0:
                 order_date = fields.Datetime.from_string(order.date_order)
                 picking.scheduled_date = order_date + timedelta(days=carrier_id.on_time_shipping or 0.0)
             else:

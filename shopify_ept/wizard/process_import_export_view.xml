@@ -162,7 +162,7 @@
                                     </b>
                                 </p>
                             </div>
-                            <div attrs="{'invisible':[('shopify_operation','!=','import_shipped_orders')]}">
+                            <div attrs="{'invisible':[('shopify_operation','not in',['import_shipped_orders', 'import_buy_with_prime_orders'])]}">
                                 <p colspan="2" class="alert alert-warning" role="alert">
                                     <b>
                                         <u>
@@ -560,19 +560,21 @@
                         </div>
                     </group>
                     <notebook
-                            attrs="{'invisible': [('shopify_operation', 'not in', ['sync_product','import_shipped_orders','import_unshipped_orders','import_orders_by_remote_ids','sync_product_by_remote_ids','export_stock','import_stock','import_payout_report','import_products_from_csv','import_cancel_orders'])]}">
+                            attrs="{'invisible': [('shopify_operation', 'not in', ['sync_product','import_shipped_orders','import_unshipped_orders','import_orders_by_remote_ids','sync_product_by_remote_ids','export_stock','import_stock','import_payout_report','import_products_from_csv','import_cancel_orders','import_buy_with_prime_orders'])]}">
                         <page string='Sync Option'>
                             <div class="row">
                                 <div class='col-md-6'>
                                     <group name='sync_order_date_wise'
-                                           attrs="{'invisible':[('shopify_operation','not in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders'])]}">
+                                           attrs="{'invisible':[('shopify_operation','not in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders','import_buy_with_prime_orders'])]}">
                                         <field name="import_products_based_on_date"
                                                attrs="{'invisible':[('shopify_operation','!=','sync_product')],'required':[('shopify_operation','=','sync_product')]}"/>
                                         <field name='orders_from_date' style="width:60%"
-                                               attrs="{'required':[('shopify_operation','in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders'])]}"/>
+                                               attrs="{'required':[('shopify_operation','in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders','import_buy_with_prime_orders'])]}"/>
                                         <field name='orders_to_date' style="width:60%"
-                                               attrs="{'required':[('shopify_operation','in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders'])]}"/>
+                                               attrs="{'required':[('shopify_operation','in',['import_shipped_orders','import_unshipped_orders','sync_product','import_cancel_orders','import_buy_with_prime_orders'])]}"/>
                                         <field name="skip_existing_product"
+                                               attrs="{'invisible':[('shopify_operation','!=','sync_product')]}"/>
+                                        <field name="is_import_draft_product"
                                                attrs="{'invisible':[('shopify_operation','!=','sync_product')]}"/>
                                     </group>
                                     <group name="export_stock_by_date"

@@ -126,6 +126,7 @@
                                            readonly="1"/>
                                     <field name="last_date_order_import" readonly="1"/>
                                     <field name="payout_last_import_date" readonly="1" invisible="1"/>
+                                    <field name="last_buy_with_prime_order_import_date" readonly="1"/>
                                 </group>
                                 <group>
                                     <field name="shopify_last_date_customer_import"

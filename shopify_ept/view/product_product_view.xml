@@ -94,8 +94,15 @@
                                            attrs="{'invisible': [('inventory_management', '=','Dont track Inventory')]}"/>
                                 </group>
                                 <group>
-                                    <field name="fix_stock_type"/>
-                                    <field name="fix_stock_value"/>
+                                    <field name="fix_stock_type"
+                                           attrs="{'invisible': [('fixed_stock_export', '=',True)]}"/>
+                                    <field name="fix_stock_value"
+                                           attrs="{'invisible': [('fixed_stock_export', '=',True)]}"/>
+                                </group>
+                                <group>
+                                    <field name="fixed_stock_export"/>
+                                    <field name="fixed_stock_export_value"
+                                           attrs="{'invisible': [('fixed_stock_export', '=',False)]}"/>
                                 </group>
                             </group>
                         </page>

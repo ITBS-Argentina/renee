@@ -2,7 +2,7 @@
 # See LICENSE file for full copyright and licensing details.
 {
     'name': 'Common Connector Library',
-    'version': '15.0.6.0.1',
+    'version': '15.0.7.0.3',
     'category': 'Sales',
     'license': 'OPL-1',
     'author': 'Emipro Technologies Pvt. Ltd.',
@@ -47,6 +47,7 @@
             '/common_connector_library/static/src/js/queue_line_dashboard.js',
             '/common_connector_library/static/src/js/dom_ready.js',
             '/common_connector_library/static/src/js/graph_widget_ept.js',
+            '/common_connector_library/static/src/js/enterprise.js',
         ],
         'web.assets_qweb': [
             '/common_connector_library/static/src/xml/*.xml',

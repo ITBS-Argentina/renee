@@ -28,16 +28,22 @@ class ShopifyQueueProcessEpt(models.TransientModel):
             @author: Haresh Mori @Emipro Technologies Pvt. Ltd on date 25/10/2019.
         """
         model = self._context.get('active_model')
-        shopify_product_queue_line_obj = self.env["shopify.product.data.queue.line.ept"]
-        product_queue_ids = self._context.get('active_ids')
+        product_queue_data_obj = self.env[model]
+        queue_line_active_ids = []
+        product_queue_ids = product_queue_data_obj.browse(self._context.get('active_ids')).filtered(
+            lambda x: x.state != 'done')
         if model == 'shopify.product.data.queue.line.ept':
-            product_queue_ids = shopify_product_queue_line_obj.search(
-                [('id', 'in', product_queue_ids)]).mapped("product_data_queue_id").ids
+            queue_line_active_ids.extend(self._context.get('active_ids'))
+            product_queue_ids = product_queue_ids.mapped('product_data_queue_id').filtered(
+                lambda queue: queue.state != 'done')
         for product_queue_id in product_queue_ids:
-            product_queue_line_batch = shopify_product_queue_line_obj.search(
-                [("product_data_queue_id", "=", product_queue_id),
-                 ("state", "in", ('draft', 'failed'))])
-            product_queue_line_batch.process_product_queue_line_data()
+            product_queue_line_ids = product_queue_id.product_data_queue_lines.filtered(
+                lambda x: x.state in ['draft', 'failed'])
+            if queue_line_active_ids:
+                product_queue_line_ids = product_queue_line_ids.filtered(
+                    lambda line: line.id in queue_line_active_ids)
+            if product_queue_line_ids:
+                product_queue_line_ids.process_product_queue_line_data()
         return True
 
     def process_customer_queue_manually(self):
@@ -48,17 +54,22 @@ class ShopifyQueueProcessEpt(models.TransientModel):
         :Task ID: 157065
         """
         model = self._context.get('active_model')
-        customer_queue_line_obj = self.env["shopify.customer.data.queue.line.ept"]
-        customer_queue_ids = self._context.get("active_ids")
-        if model == "shopify.customer.data.queue.line.ept":
-            customer_queue_ids = customer_queue_line_obj.search([('id', 'in', customer_queue_ids)]).mapped(
-                "synced_customer_queue_id").ids
+        customer_queue_data_obj = self.env[model]
+        queue_line_active_ids = []
+        customer_queue_ids = customer_queue_data_obj.browse(self._context.get('active_ids')).filtered(
+            lambda x: x.state != 'done')
+        if model == 'shopify.customer.data.queue.line.ept':
+            queue_line_active_ids.extend(self._context.get('active_ids'))
+            customer_queue_ids = customer_queue_ids.mapped('synced_customer_queue_id').filtered(
+                lambda queue: queue.state != 'done')
         for customer_queue_id in customer_queue_ids:
-            synced_customer_queue_line_ids = customer_queue_line_obj.search(
-                [("synced_customer_queue_id", "=", customer_queue_id),
-                 ("state", "in", ["draft", "failed"])])
-            if synced_customer_queue_line_ids:
-                synced_customer_queue_line_ids.process_customer_queue_lines()
+            customer_queue_line_ids = customer_queue_id.synced_customer_queue_line_ids.filtered(
+                lambda x: x.state in ['draft', 'failed'])
+            if queue_line_active_ids:
+                customer_queue_line_ids = customer_queue_line_ids.filtered(
+                    lambda line: line.id in queue_line_active_ids)
+            if customer_queue_line_ids:
+                customer_queue_line_ids.process_customer_queue_lines()
 
     def process_order_queue_manually(self):
         """This method used to process the customer queue manually. You can call the method from here :
@@ -66,19 +77,22 @@ class ShopifyQueueProcessEpt(models.TransientModel):
             @author: Haresh Mori @Emipro Technologies Pvt. Ltd on date 14/10/2019.
         """
         model = self._context.get('active_model')
-        shopify_order_queue_line_obj = self.env["shopify.order.data.queue.line.ept"]
-        order_queue_ids = self._context.get('active_ids')
-        if model == "shopify.order.data.queue.line.ept":
-            order_queue_ids = shopify_order_queue_line_obj.search([('id', 'in', order_queue_ids)]).mapped(
-                "shopify_order_data_queue_id").ids
-        self.env.cr.execute(
-            """update shopify_order_data_queue_ept set is_process_queue = False where is_process_queue = True""")
-        self._cr.commit()
+        order_queue_data_obj = self.env[model]
+        queue_line_active_ids = []
+        order_queue_ids = order_queue_data_obj.browse(self._context.get('active_ids')).filtered(
+            lambda x: x.state != 'done')
+        if model == 'shopify.order.data.queue.line.ept':
+            queue_line_active_ids.extend(self._context.get('active_ids'))
+            order_queue_ids = order_queue_ids.mapped('shopify_order_data_queue_id').filtered(
+                lambda queue: queue.state != 'done')
         for order_queue_id in order_queue_ids:
-            order_queue_line_batch = shopify_order_queue_line_obj.search(
-                [("shopify_order_data_queue_id", "=", order_queue_id),
-                 ("state", "in", ('draft', 'failed'))])
-            order_queue_line_batch.process_import_order_queue_data()
+            order_queue_line_ids = order_queue_id.order_data_queue_line_ids.filtered(
+                lambda x: x.state in ['draft', 'failed'])
+            if queue_line_active_ids:
+                order_queue_line_ids = order_queue_line_ids.filtered(
+                    lambda line: line.id in queue_line_active_ids)
+            if order_queue_line_ids:
+                order_queue_line_ids.process_import_order_queue_data()
         return True
 
     def process_export_stock_queue_manually(self):
@@ -88,19 +102,22 @@ class ShopifyQueueProcessEpt(models.TransientModel):
         Task Id : 199065
         """
         model = self._context.get('active_model')
-        shopify_export_stock_queue_line_obj = self.env["shopify.export.stock.queue.line.ept"]
-        export_stock_queue_ids = self._context.get('active_ids')
-        if model == "shopify.export.stock.queue.line.ept":
-            export_stock_queue_ids = shopify_export_stock_queue_line_obj.search(
-                [('id', 'in', export_stock_queue_ids)]).mapped("export_stock_queue_id").ids
-        self.env.cr.execute(
-            """update shopify_export_stock_queue_ept set is_process_queue = False where is_process_queue = True""")
-        self._cr.commit()
+        export_stock_queue_data_obj = self.env[model]
+        queue_line_active_ids = []
+        export_stock_queue_ids = export_stock_queue_data_obj.browse(self._context.get('active_ids')).filtered(
+            lambda x: x.state != 'done')
+        if model == 'shopify.export.stock.queue.line.ept':
+            queue_line_active_ids.extend(self._context.get('active_ids'))
+            export_stock_queue_ids = export_stock_queue_ids.mapped('export_stock_queue_id').filtered(
+                lambda queue: queue.state != 'done')
         for export_stock_queue_id in export_stock_queue_ids:
-            export_stock_queue_line_obj = shopify_export_stock_queue_line_obj.search(
-                [("export_stock_queue_id", "=", export_stock_queue_id),
-                 ("state", "in", ('draft', 'failed'))])
-            export_stock_queue_line_obj.process_export_stock_queue_data()
+            export_stock_queue_line_ids = export_stock_queue_id.export_stock_queue_line_ids.filtered(
+                lambda x: x.state in ['draft', 'failed'])
+            if queue_line_active_ids:
+                export_stock_queue_line_ids = export_stock_queue_line_ids.filtered(
+                    lambda line: line.id in queue_line_active_ids)
+            if export_stock_queue_line_ids:
+                export_stock_queue_line_ids.process_export_stock_queue_data()
         return True
 
     def set_to_completed_queue(self):

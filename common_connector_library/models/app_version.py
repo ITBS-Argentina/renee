@@ -48,7 +48,7 @@ class EmiproAppVersionDetails(models.Model):
         request_data = self._get_installed_modules(details)
         request_data = self._encrypt_details(request_data)
         if request_data:
-            url = 'https://portal.emiprotechnologies.com/app_notification/send'
+            url = 'https://internalerp.emiprotechnologies.com/app_notification/send'
             headers = {
                 'Accept': '*/*',
                 'Content-Type': 'text/plain',
@@ -77,7 +77,7 @@ class EmiproAppVersionDetails(models.Model):
 
     def receive_app_updates(self, details):
         # details = self._encrypt_details(details)
-        url = 'https://portal.emiprotechnologies.com/app_notification/receive'
+        url = 'https://internalerp.emiprotechnologies.com/app_notification/receive'
         headers = {
             'Accept': '*/*',
             'Content-Type': 'text/plain',
@@ -298,14 +298,17 @@ class EmiproAppVersionDetails(models.Model):
             if counter == 6:
                 break
             update = updates.filtered(lambda u: u.version == version)
-            details.append({
-                'version': update.version,
-                'module_name': update.module_id.shortdesc,
-                'detail': update.update_detail,
-                'is_latest': update.is_latest,
-                'update_required': update.upgrade_require,
-                'update_url': update.update_url
-            })
+            if update.module_id.installed_version == update.version:
+                return details
+            else:
+                details.append({
+                    'version': update.version,
+                    'module_name': update.module_id.shortdesc,
+                    'detail': update.update_detail,
+                    'is_latest': update.is_latest,
+                    'update_required': update.upgrade_require,
+                    'update_url': update.update_url
+                })
             counter += 1
         return details
 

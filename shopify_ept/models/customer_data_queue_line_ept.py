@@ -57,6 +57,7 @@ class ShopifyCustomerDataQueueLineEpt(models.Model):
         existing_customer_data_queue = synced_shopify_customers_line_obj.search(
             [('shopify_customer_data_id', '=', customer_id), ('shopify_instance_id', '=', customer_queue_id.shopify_instance_id.id),
              ('state', 'in', ['draft', 'failed'])])
+        existing_customer_queue = existing_customer_data_queue.synced_customer_queue_id
         line_vals = {
             "synced_customer_queue_id": customer_queue_id.id,
             "shopify_customer_data_id": customer_id or "",
@@ -68,7 +69,9 @@ class ShopifyCustomerDataQueueLineEpt(models.Model):
         if not existing_customer_data_queue:
             synced_shopify_customers_line_obj.create(line_vals)
         else:
-            existing_customer_data_queue.update(line_vals)
+            existing_customer_data_queue.write({'shopify_synced_customer_data': data, 'state': 'draft'})
+            if not existing_customer_queue.synced_customer_queue_line_ids:
+                existing_customer_queue.unlink()
         return True
 
     @api.model

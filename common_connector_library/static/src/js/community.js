@@ -209,9 +209,15 @@ web_extends.WebClient = class WebClient extends Component {
     }
 
     _getActionController(ev) {
+      if (this.actionService && this.actionService.currentController) {
         const currentController = this.actionService.currentController.action;
-        const ActionService = this.actionService
-        return {currentController,ActionService};
+        const ActionService = this.actionService;
+        return { currentController, ActionService };
+      } else {
+        // Handle the case when either this.actionService or this.actionService.currentController is null
+        // You can return a default value or throw an error, depending on your requirements
+        return { currentController: null, ActionService: null };
+      }
     }
 
     /**
@@ -238,7 +244,7 @@ web_extends.WebClient = class WebClient extends Component {
             return _onClickHideEpt(ev);
         });
 
-        const url = currentController.context.params
+        const url = currentController && currentController.context ? currentController.context.params : null;
         $('#close_popup').click(function(){
             return _onClickCloseEpt(url);
         });

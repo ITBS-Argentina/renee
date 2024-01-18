@@ -356,3 +356,18 @@ class SaleOrder(models.Model):
         if bom_line:
             vals.update({'bom_line_id': bom_line[0].id})
         return vals
+
+    def prepare_order_note_with_customer_note(self, vals):
+        """
+        This method use for concate customer note and odoo default set note.
+        :param vals:
+        :return: vals
+        @author: Nilam Kubavat on Date 03-July-2023 for Task_id:233459
+        """
+        note_value = vals.get('note', '') if vals.get('note', False) else ''  # Get the current note value, default to an empty string if it's None
+        invoice_terms = self.env.company.invoice_terms or ''  # Get invoice terms, default to an empty string if it's None
+        if note_value and invoice_terms:  # Only add a space if both values are non-empty
+            vals['note'] = f'{note_value} {invoice_terms}'.strip()
+        else:
+            vals['note'] = (note_value + invoice_terms).strip()  # Handle either note_value or invoice_terms being empty
+        return vals
