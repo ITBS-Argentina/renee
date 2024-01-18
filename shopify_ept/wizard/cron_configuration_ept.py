@@ -144,7 +144,7 @@ class ShopifyCronConfigurationEpt(models.TransientModel):
     shopify_import_buy_with_prime_order_interval_type = fields.Selection([('minutes', 'Minutes'), ('hours', 'Hours'),
                                                                           ('days', 'Days'), ('weeks', 'Weeks'),
                                                                           ('months', 'Months')],
-                                                                         'Interval Unit for Import Shipped Order')
+                                                                         'Interval Unit for Import Prime Order')
     shopify_import_buy_with_prime_order_next_execution = fields.Datetime(
         'Next Execution for Import Buy with Prime Order',
         help='Next Execution for Import Buy with Prime Order')
