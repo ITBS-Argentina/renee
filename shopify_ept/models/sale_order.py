@@ -471,45 +471,45 @@ class SaleOrder(models.Model):
             _logger.info("Starting auto workflow process for Odoo order(%s) and Shopify order is (%s)",
                          sale_order.id, order_number)
             message = ""
-            try:
-                if sale_order.shopify_order_status == "fulfilled":
-                    sale_order.auto_workflow_process_id.with_context(
-                        log_book_id=log_book.id).shipped_order_workflow_ept(sale_order)
-                    if sale_order.order_line.filtered(lambda line: line.product_id.tracking != "none"):
-                        self.process_remaining_stock_move(sale_order, order_data_line, log_book)
-                    if order_data_line and order_data_line.shopify_order_data_queue_id.created_by == "scheduled_action":
+            # try:
+            if sale_order.shopify_order_status == "fulfilled":
+                sale_order.auto_workflow_process_id.with_context(
+                    log_book_id=log_book.id).shipped_order_workflow_ept(sale_order)
+                if sale_order.order_line.filtered(lambda line: line.product_id.tracking != "none"):
+                    self.process_remaining_stock_move(sale_order, order_data_line, log_book)
+                if order_data_line and order_data_line.shopify_order_data_queue_id.created_by == "scheduled_action":
+                    created_by = 'Scheduled Action'
+                else:
+                    created_by = self.env.user.name
+                # Below code add for create partially/fully refund
+                message = self.create_shipped_order_refund(shopify_financial_status, order_response, sale_order,
+                                                           created_by)
+            elif not sale_order.is_risky_order:
+                if sale_order.shopify_order_status == "partial":
+                    sale_order.process_order_fullfield_qty(order_response)
+                    sale_order.with_context(log_book_id=log_book.id,
+                                            shopify_order_financial_status=order_response.get(
+                                                "financial_status")).process_orders_and_invoices_ept()
+                    if order_data_line and order_data_line.shopify_order_data_queue_id.created_by == \
+                            "scheduled_action":
                         created_by = 'Scheduled Action'
                     else:
                         created_by = self.env.user.name
                     # Below code add for create partially/fully refund
                     message = self.create_shipped_order_refund(shopify_financial_status, order_response, sale_order,
                                                                created_by)
-                elif not sale_order.is_risky_order:
-                    if sale_order.shopify_order_status == "partial":
-                        sale_order.process_order_fullfield_qty(order_response)
-                        sale_order.with_context(log_book_id=log_book.id,
-                                                shopify_order_financial_status=order_response.get(
-                                                    "financial_status")).process_orders_and_invoices_ept()
-                        if order_data_line and order_data_line.shopify_order_data_queue_id.created_by == \
-                                "scheduled_action":
-                            created_by = 'Scheduled Action'
-                        else:
-                            created_by = self.env.user.name
-                        # Below code add for create partially/fully refund
-                        message = self.create_shipped_order_refund(shopify_financial_status, order_response, sale_order,
-                                                                   created_by)
-                    else:
-                        sale_order.with_context(log_book_id=log_book.id,
-                                                shopify_order_financial_status=order_response.get(
-                                                    "financial_status")).process_orders_and_invoices_ept()
-            except Exception as error:
-                if order_data_line:
-                    order_data_line.write({"state": "failed", "processed_at": datetime.now(),
-                                           "sale_order_id": sale_order.id})
-                message = "Receive error while process auto invoice workflow, Error is:  (%s)" % (error)
-                _logger.info(message)
-                self.create_shopify_log_line(message, order_data_line, log_book, order_response.get("name"))
-                continue
+                else:
+                    sale_order.with_context(log_book_id=log_book.id,
+                                            shopify_order_financial_status=order_response.get(
+                                                "financial_status")).process_orders_and_invoices_ept()
+            # except Exception as error:
+            #     if order_data_line:
+            #         order_data_line.write({"state": "failed", "processed_at": datetime.now(),
+            #                                "sale_order_id": sale_order.id})
+            #     message = "Receive error while process auto invoice workflow, Error is:  (%s)" % (error)
+            #     _logger.info(message)
+            #     self.create_shopify_log_line(message, order_data_line, log_book, order_response.get("name"))
+            #     continue
             _logger.info("Done auto workflow process for Odoo order(%s) and Shopify order is (%s)", sale_order.name,
                          order_number)
 
@@ -806,7 +806,8 @@ class SaleOrder(models.Model):
                                                      payment_gateway,
                                                      workflow)
         order_vals.update({'payment_term_id': payment_term and payment_term.id or False})
-        is_create_order = self.check_sale_order_validation(instance, order_response, order_vals, order_data_queue_line, log_book_id)
+        is_create_order = self.check_sale_order_validation(instance, order_response, order_vals, order_data_queue_line,
+                                                           log_book_id)
         if not is_create_order:
             return False
         payments = []
