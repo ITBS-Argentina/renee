@@ -386,7 +386,7 @@ class ResConfigSettings(models.TransientModel):
                                                    help="If checked, it will add new product in the order if receive in the webhook")
     import_buy_with_prime_shopify_order = fields.Boolean(string="Import Buy with Prime Orders",
                                                          help="If checked, it will import order of buy with prime orders")
-    buy_with_prime_warehouse_id = fields.Many2one("stock.warehouse", string="Shopify Warehouse",
+    buy_with_prime_warehouse_id = fields.Many2one("stock.warehouse", string="Shopify Buy with Prime Warehouse",
                                                   domain="[('company_id', '=',shopify_company_id)]")
     buy_with_prime_tag_ids = fields.Many2many("shopify.tags", "buy_with_prime_shopify_tags_rel", "product_tmpl_id",
                                               "tag_id", "Tags for import buy with prime orders",
