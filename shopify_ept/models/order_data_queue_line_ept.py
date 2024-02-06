@@ -72,7 +72,7 @@ class ShopifyOrderDataQueueLineEpt(models.Model):
 
         existing_order_data = order_data_queue_line_obj.search(
             [('shopify_order_id', '=', order_dict.get("id")), ('shopify_instance_id', '=', instance.id),
-             ('state', 'in', ['draft', 'failed'])])
+             ('state', 'in', ['draft', 'failed']), ('shopify_order_data_queue_id.is_action_require', '=', False)])
         existing_queue = existing_order_data.shopify_order_data_queue_id
         order_queue_line_vals = {"shopify_order_id": order_dict.get("id", False),
                                  "shopify_instance_id": instance.id,
@@ -159,7 +159,7 @@ class ShopifyOrderDataQueueLineEpt(models.Model):
 
         order_queue = shopify_order_queue_obj.search(
             [("created_by", "=", created_by), ("state", "=", "draft"), ("shopify_instance_id", "=", instance.id),
-             ("queue_type", "=", queue_type)], limit=1)
+             ("queue_type", "=", queue_type), ('is_action_require', '=', False)], limit=1)
         if order_queue:
             message = "Order %s added into Order Queue %s." % (order.get("name"), order_queue.name)
             need_to_create_queue = False

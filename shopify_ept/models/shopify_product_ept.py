@@ -598,8 +598,12 @@ class ShopifyProductProductEpt(models.Model):
         instance.connect_in_shopify()
         if not shopify_template.shopify_image_ids:
             return False
+        if len(shopify_template.shopify_product_ids) == 1:
+            shopify_images = shopify_template.shopify_image_ids.filtered(lambda v: not v.shopify_variant_id)
+        else:
+            shopify_images = shopify_template.shopify_image_ids
 
-        for image in shopify_template.shopify_image_ids:
+        for image in shopify_images:
             if image.odoo_image_id.image:
                 shopify_image = shopify.Image()
                 shopify_image.product_id = shopify_template.shopify_tmpl_id

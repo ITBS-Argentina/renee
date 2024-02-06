@@ -235,6 +235,7 @@ class ResConfigSettings(models.TransientModel):
             financial_status_ids = self.env['sale.auto.workflow.configuration.ept'].search(
                 [('shopify_instance_id', '=', self._context.get('default_shopify_instance_id', False))]).ids
             return [(6, 0, financial_status_ids)]
+
     @api.model
     def _default_buy_with_prime_tag_ids(self):
         """ Set default tag for buy with prime order.
@@ -243,6 +244,13 @@ class ResConfigSettings(models.TransientModel):
         """
         tag_ids = self.env.ref('shopify_ept.shopify_product_tag_buy_with_prime')
         return [(6, 0, [tag_ids.id])] if tag_ids else False
+
+    @api.model
+    def _get_default_return_location(self):
+        shopify_location_obj = self.env['shopify.location.ept']
+        shopify_warehouse = shopify_location_obj.search([]).warehouse_for_order
+        locations = self.env['stock.location'].search([('location_id', 'child_of', shopify_warehouse.lot_stock_id.ids)])
+        return [('id', 'in', locations.ids)]
 
     shopify_instance_id = fields.Many2one("shopify.instance.ept", "Shopify Instance")
     shopify_company_id = fields.Many2one("res.company", string="Shopify Instance Company",
@@ -378,13 +386,18 @@ class ResConfigSettings(models.TransientModel):
                                                    help="If checked, it will add new product in the order if receive in the webhook")
     import_buy_with_prime_shopify_order = fields.Boolean(string="Import Buy with Prime Orders",
                                                          help="If checked, it will import order of buy with prime orders")
-    buy_with_prime_warehouse_id = fields.Many2one("stock.warehouse", string="Shopify Warehouse for Buy with prime",
+    buy_with_prime_warehouse_id = fields.Many2one("stock.warehouse", string="Shopify Warehouse",
                                                   domain="[('company_id', '=',shopify_company_id)]")
     buy_with_prime_tag_ids = fields.Many2many("shopify.tags", "buy_with_prime_shopify_tags_rel", "product_tmpl_id",
                                               "tag_id", "Tags for import buy with prime orders",
                                               default=_default_buy_with_prime_tag_ids)
     force_transfer_move_of_buy_with_prime_orders = fields.Boolean(string="Force Transfer",
                                                                   help="If checked, it will forcefully done the stock move while stock also not there.")
+    return_picking_order = fields.Boolean("Want to return picking", help="If checked, it will create a return in odoo")
+    stock_validate_for_return = fields.Boolean("Want to validate return picking",
+                                               help="If checked, it will validate a return picking")
+    return_location_id = fields.Many2one('stock.location', 'Return Location',
+                                         domain=lambda self: self._get_default_return_location())
 
     @api.onchange("shopify_instance_id")
     def onchange_shopify_instance_id(self):
@@ -445,8 +458,10 @@ class ResConfigSettings(models.TransientModel):
             self.buy_with_prime_warehouse_id = instance.buy_with_prime_warehouse_id and instance.buy_with_prime_warehouse_id.id or False
             self.force_transfer_move_of_buy_with_prime_orders = instance.force_transfer_move_of_buy_with_prime_orders
             self.buy_with_prime_tag_ids = instance.buy_with_prime_tag_ids.ids
-
             self.shopify_payout_user_ids = instance.shopify_payout_user_ids or False
+            self.return_picking_order = instance.return_picking_order
+            self.stock_validate_for_return = instance.stock_validate_for_return
+            self.return_location_id = instance.return_location_id and instance.return_location_id.id or False
 
     def execute(self):
         """This method used to set value in an instance of configuration.
@@ -511,10 +526,14 @@ class ResConfigSettings(models.TransientModel):
             values['update_qty_order_webhook'] = self.update_qty_order_webhook
             values['add_new_product_order_webhook'] = self.add_new_product_order_webhook
             values['import_buy_with_prime_shopify_order'] = self.import_buy_with_prime_shopify_order
-            values["buy_with_prime_warehouse_id"] = self.buy_with_prime_warehouse_id and self.buy_with_prime_warehouse_id.id or False
+            values[
+                "buy_with_prime_warehouse_id"] = self.buy_with_prime_warehouse_id and self.buy_with_prime_warehouse_id.id or False
             values['force_transfer_move_of_buy_with_prime_orders'] = self.force_transfer_move_of_buy_with_prime_orders
             values['buy_with_prime_tag_ids'] = [(6, 0, self.buy_with_prime_tag_ids.ids)]
             values.update({"shopify_payout_user_ids": [(6, 0, self.shopify_payout_user_ids.ids)]})
+            values['return_picking_order'] = self.return_picking_order
+            values['stock_validate_for_return'] = self.stock_validate_for_return
+            values["return_location_id"] = self.return_location_id and self.return_location_id.id or False
 
             product_webhook_changed = customer_webhook_changed = order_webhook_changed = False
             if instance.create_shopify_products_webhook != self.create_shopify_products_webhook:

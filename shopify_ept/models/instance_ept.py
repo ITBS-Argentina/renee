@@ -352,6 +352,10 @@ class ShopifyInstanceEpt(models.Model):
                                               "Tags for import buy with prime orders")
     force_transfer_move_of_buy_with_prime_orders = fields.Boolean(string="Force Transfer",
                                                                   help="If checked, it will forcefully done the stock move while stock also not there.")
+    return_picking_order = fields.Boolean("Want to return picking", help="If checked, it will create a return in odoo")
+    stock_validate_for_return = fields.Boolean("Want to validate return picking",
+                                               help="If checked, it will validate a return picking")
+    return_location_id = fields.Many2one('stock.location', 'Return Location')
 
     _sql_constraints = [('unique_host', 'unique(shopify_host)',
                          "Instance already exists for given host. Host must be Unique for the instance!")]

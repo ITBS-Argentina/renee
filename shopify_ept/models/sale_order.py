@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import time
 import pytz
 from odoo.tools.misc import format_date
-
+from odoo.tests import Form
 from dateutil import parser
 
 from odoo import models, fields, api, _
@@ -785,8 +785,15 @@ class SaleOrder(models.Model):
         if payment_gateway_names and payment_gateway_names[0]:
             if len(payment_gateway_names) == 1:
                 gateway = payment_gateway_names[0]
-            elif 'gift_card' in payment_gateway_names:
-                gateway = [val for val in payment_gateway_names if val != 'gift_card'][0]
+            # elif 'gift_card' in payment_gateway_names:
+            #     gateway = [val for val in payment_gateway_names if val != 'gift_card'][0]
+            else:
+                if order_response.get('transaction'):
+                    for transaction in order_response.get('transaction'):
+                        if "Cash on Delivery" in transaction.get("gateway"):
+                            gateway = transaction.get("gateway")
+                        elif transaction.get('gateway') != 'gift_card' and transaction.get("status") == 'success':
+                            gateway = transaction.get("gateway")
         payment_gateway, workflow, payment_term = \
             payment_gateway_obj.shopify_search_create_gateway_workflow(instance, order_data_queue_line, order_response,
                                                                        log_book_id, gateway)
@@ -799,12 +806,20 @@ class SaleOrder(models.Model):
                                                      payment_gateway,
                                                      workflow)
         order_vals.update({'payment_term_id': payment_term and payment_term.id or False})
+        is_create_order = self.check_sale_order_validation(instance, order_response, order_vals, order_data_queue_line, log_book_id)
+        if not is_create_order:
+            return False
+        payments = []
         if len(order_response.get('payment_gateway_names')) > 1 and order_response.get('financial_status') != 'voided':
-            payment_vals = self.prepare_vals_shopify_multi_payment(instance, order_data_queue_line, order_response,
-                                                                   log_book_id, payment_gateway, workflow)
-            if not payment_vals:
-                return False
-            order_vals.update({'shopify_payment_ids': payment_vals, 'is_shopify_multi_payment': True})
+            for transaction in order_response.get('transaction'):
+                if "Cash on Delivery" in transaction.get("gateway") or transaction.get('status') == 'success':
+                    payments.append(transaction.get("gateway"))
+            if len(payments) > 1:
+                payment_vals = self.prepare_vals_shopify_multi_payment(instance, order_data_queue_line, order_response,
+                                                                       log_book_id, payment_gateway, workflow)
+                if not payment_vals:
+                    return False
+                order_vals.update({'shopify_payment_ids': payment_vals, 'is_shopify_multi_payment': True})
 
         order = self.create(order_vals)
 
@@ -824,6 +839,55 @@ class SaleOrder(models.Model):
             self.set_line_warehouse_based_on_location(order, instance, order_response)
         # self.set_fulfilment_order_id_and_fulfillment_line_id(order, instance, order_response)
         return order
+
+    def check_sale_order_validation(self, instance, order_response, order_vals, order_data_queue_line, log_book_id):
+        """
+        This method use for Check customer, Order Date, price list, warehouse and picking policy available in Order
+        Response.
+        :param order_vals:
+        @author: Yagnik Joshi on Date 28-12-2023.
+        """
+        is_create_order = True
+        common_log_line_obj = self.env["common.log.lines.ept"]
+        error_messages = []
+        model = "sale.order"
+        model_id = common_log_line_obj.get_model_id(model)
+
+        if order_response.get('shipping_lines', []):
+            shipping_product = instance.shipping_product_id
+
+            if not shipping_product:
+                is_create_order = False
+                error_messages.append(
+                    " When creating a new delivery method, the system encountered an issue as it could not find the shipping product in the instance configuration.  " \
+                    " \n - This resulted in the failure of the system to create the new delivery method. \n - To resolve this issue, please follow these steps: %s." \
+                    " \n 1 Go to Shopify >> Instance >> Default Products.  \n 2 Review whether the shipping product is set. \n 3 If already set, ensure that it is active in Odoo. ")
+
+        if not order_vals.get('pricelist_id'):
+            is_create_order = False
+            error_messages.append(
+                " The order import operation failed because the price list configuration was not found in the instance configuration. " \
+                " \n To resolve this issue, navigate to Shopify >> Configuration >> Settings, select instance and configure Instance Price list")
+
+        if not order_vals.get('warehouse_id'):
+            is_create_order = False
+            error_messages.append(
+                " The order import operation failed because the warehouse configuration was not found in the instance configuration. " \
+                " \n To resolve this issue, navigate to Shopify >> Configuration >> Settings, select instance and configure warehouse")
+
+        if not order_vals.get('picking_policy'):
+            is_create_order = False
+            error_messages.append(
+                " The order import operation failed because the shipping policy configuration was not found in the auto invoice workflow configuration. " \
+                " \n To resolve this issue, navigate to Shopify >> Configuration >> Financial Status. Review whether Auto workflow is configured, and within Auto workflow, ensure that the shipping policy is also configured.")
+
+        # Create a log for each error message
+        for message in error_messages:
+            common_log_line_obj.shopify_create_order_log_line(message, model_id,
+                                                              order_data_queue_line, log_book_id,
+                                                              order_response.get('name'))
+
+        return is_create_order
 
     def set_fulfilment_order_id_and_fulfillment_line_id(self, order, picking):
         """
@@ -1921,6 +1985,9 @@ class SaleOrder(models.Model):
                         "refunds") and shopify_instance.refund_order_webhook:
                     self.process_order_refund_data_ept(shopify_status, order_data, order, created_by, shopify_instance,
                                                        queue_line, log_book)
+                    if shopify_instance.return_picking_order:
+                        self.process_picking_return(shopify_status, order_data, order, created_by, shopify_instance,
+                                                    queue_line, log_book)
 
                 if order_data.get('fulfillment_status') in (
                         'fulfilled', 'partial') and shopify_instance.ship_order_webhook and order_data.get(
@@ -1946,6 +2013,118 @@ class SaleOrder(models.Model):
                 self.create_shopify_log_line(message, queue_line, log_book, order_data.get("name"))
                 queue_line.write({'state': 'failed', 'processed_at': datetime.now()})
         return orders
+
+    def process_picking_return(self, shopify_status, order_data, order, created_by, instance, queue_line, log_book):
+        common_log_line_obj = self.env["common.log.lines.ept"]
+        message = self.create_picking_return(shopify_status, order_data, order, created_by)
+        if message:
+            self.create_shopify_log_line(message, queue_line, log_book, order_data.get("name"))
+            queue_line.write({'state': 'failed', 'processed_at': datetime.now()})
+        else:
+            queue_line.state = "done"
+
+    def create_picking_return(self, shopify_status, order_data, order, created_by):
+        message = ""
+        if shopify_status == "refunded" or "partially_refunded" and order_data.get(
+                "refunds"):
+            is_need_create_return = False
+            for refund in order_data.get('refunds'):
+                for transaction in refund.get('transactions'):
+                    if transaction.get('kind') == 'refund' and transaction.get('status') == 'success':
+                        is_need_create_return = True
+
+            if is_need_create_return:
+                message = order.create_shopify_order_return(order_data.get("refunds"))
+        return message
+
+    def create_shopify_order_return(self, refunds_data):
+        """
+        This method use for create return base on refund data from shopify.
+        @author: Nilam Kubavat @Emipro Technologies Pvt. Ltd on date 17 Jan 2024.
+        Task_id: 6264
+        """
+        message = ""
+        refund_line_items = self.prepare_refund_data(refunds_data)
+        orig_move_ids = self.picking_ids.move_lines.move_orig_ids if self.picking_ids.move_lines.move_orig_ids else self.picking_ids.move_lines
+        orig_done_picking_ids = orig_move_ids.picking_id.filtered(lambda picking: picking.state == "done")
+        if not orig_done_picking_ids:
+            message = "Done picking is not available, so return can't be generated."
+        need_to_remove_lines = []
+        for picking_id in orig_done_picking_ids:
+            return_picking_ids = self.picking_ids.filtered(lambda x: "Return of" in x.origin)
+            stock_return_picking_form = Form(self.env['stock.return.picking'].with_context(
+                active_ids=picking_id.ids,
+                active_id=picking_id.ids[0],
+                active_model='stock.picking'
+            ))
+            if self.shopify_instance_id.return_location_id:
+                stock_return_picking_form.location_id = self.shopify_instance_id.return_location_id
+            return_wiz = stock_return_picking_form.save()
+            for return_move_line in return_wiz.product_return_moves:
+                refund_line = next(
+                    (item for item in refund_line_items if item["product_id"] == return_move_line.product_id.id),
+                    None)
+                # if refund_line and return_move_line.product_id.id == refund_line["product_id"]:
+                if refund_line:
+                    qty_to_return = refund_line["quantity"]
+                    existing_return_qty = return_picking_ids.move_lines.filtered(
+                        lambda x: x.product_id.id == refund_line["product_id"]).mapped('product_uom_qty')
+                    return_qty = sum(existing_return_qty)
+
+                    if qty_to_return > return_qty:
+                        return_move_line.write({
+                            'quantity': qty_to_return - return_qty,
+                            'to_refund': True
+                        })
+                    else:
+                        need_to_remove_lines.append(return_move_line)
+                else:
+                    need_to_remove_lines.append(return_move_line)
+
+            for need_to_remove_line in need_to_remove_lines:
+                need_to_remove_line.unlink()
+            if return_wiz.product_return_moves:
+                res = return_wiz.create_returns()
+                return_picking = self.env['stock.picking'].browse(res['res_id'])
+                return_picking.message_post(
+                    body=_("Return Picking is Generated by Webhook as Order is Refunded in Shopify."))
+                if return_picking:
+                    if self.shopify_instance_id.stock_validate_for_return:
+                        action_wizard = return_picking.button_validate()
+                        immediate_transfer = Form(
+                            self.env[action_wizard['res_model']].with_context(action_wizard['context'])).save()
+                        immediate_transfer.process()
+                        return_picking.message_post(body=_("Return Picking is Validate by Webhook."))
+        return message
+
+    def prepare_refund_data(self, refunds_data):
+        refund_line_items = []
+        for refund_data_line in refunds_data:
+            for refund_line in refund_data_line.get("refund_line_items"):
+                if refund_line.get("restock_type") == "return":
+                    product_id = self.order_line.filtered(
+                        lambda x: x.shopify_line_id == str(refund_line.get("line_item_id"))).product_id
+                    bom_lines = self.check_for_bom_product(product_id)
+                    for bom_line in bom_lines:
+                        bom_product = bom_line[0].product_id
+                        bom_product_qty = (bom_line[1].get('qty', 0)) * refund_line.get("quantity")
+                        existing_entry = next(
+                            (item for item in refund_line_items if item["product_id"] == bom_product.id),
+                            None)
+                        if existing_entry:
+                            existing_entry["quantity"] += bom_product_qty
+                        else:
+                            refund_line_items.append({"quantity": bom_product_qty, "product_id": bom_product.id})
+                    if not bom_lines:
+                        existing_entry = next(
+                            (item for item in refund_line_items if item["product_id"] == product_id.id),
+                            None)
+                        if existing_entry:
+                            existing_entry["quantity"] += refund_line.get("quantity")
+                        else:
+                            refund_line_items.append(
+                                {"quantity": refund_line.get("quantity"), "product_id": product_id.id})
+        return refund_line_items
 
     def update_qty_in_order_webhook_ept(self, instance, queue_line, order_data, log_book):
         """
@@ -2298,13 +2477,28 @@ class SaleOrder(models.Model):
 
     def webhook_paid_workflow_process_ept(self, order, instance, queue_line, order_data, log_book, shopify_status):
         invoices = order.invoice_ids
-        gateways = order_data.get('payment_gateway_names')
-        if len(gateways) > 1:
-            gateway = gateways[0]
-            if gateway == 'gift_card':
-                gateway = gateways[1]
-        else:
-            gateway = gateways[0] if gateways else 'no_payment_gateway'
+        # gateways = order_data.get('payment_gateway_names')
+        # if len(gateways) > 1:
+        #     gateway = gateways[0]
+        #     if gateway == 'gift_card':
+        #         gateway = gateways[1]
+        # else:
+        #     gateway = gateways[0] if gateways else 'no_payment_gateway'
+
+        payment_gateway_names = order_data.get('payment_gateway_names')
+        if payment_gateway_names and payment_gateway_names[0]:
+            if len(payment_gateway_names) == 1:
+                gateway = payment_gateway_names[0]
+            # elif 'gift_card' in payment_gateway_names:
+            #     gateway = [val for val in payment_gateway_names if val != 'gift_card'][0]
+            else:
+                if order_data.get('transaction'):
+                    for transaction in order_data.get('transaction'):
+                        if "Cash on Delivery" in transaction.get("gateway"):
+                            gateway = transaction.get("gateway")
+                        elif transaction.get('gateway') != 'gift_card' and transaction.get("status") == 'success':
+                            gateway = transaction.get("gateway")
+
         payment_gateway, workflow, payment_term = self.env[
             "shopify.payment.gateway.ept"].shopify_search_create_gateway_workflow(instance, queue_line,
                                                                                   order_data, log_book,

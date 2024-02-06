@@ -404,6 +404,50 @@
                             </div>
                         </div>
                         <div class="col-12 col-lg-6 o_setting_box"
+                             attrs="{'invisible': [('refund_order_webhook', '=', False)]}">
+                            <div class="o_setting_left_pane">
+                                <field name="return_picking_order"
+                                       style="margin-left: -0.5em"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="return_picking_order"
+                                       string="Would you like to enable Return from Shopify to Odoo?"/>
+                                <div class="text-muted">
+                                    If this feature is enabled, the system will automatically generate a Return in
+                                    Odoo when a user creates a refund directly in Shopify.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box"
+                             attrs="{'invisible': [('return_picking_order', '=', False)]}">
+                            <div class="o_setting_left_pane">
+                                <field name="stock_validate_for_return"
+                                       style="margin-left: -0.5em"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="stock_validate_for_return"
+                                       string="Would you like to validate return?"/>
+                                <div class="text-muted">
+                                    If this feature is enabled, the system will automatically validate a Return.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xs-12 col-md-6 o_setting_box"
+                             attrs="{'invisible': [('return_picking_order', '=', False)]}">
+                            <div class="o_setting_right_pane">
+                                <label for="return_location_id" string="Location Id for Return"/>
+                                <div class="text-muted">
+                                    Selected Location will be set in return of picking.
+                                </div>
+                                <div class="content-group">
+                                    <div class="mt16">
+                                        <field name="return_location_id"
+                                               class="o_light_label" widget="selection"/>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box"
                              attrs="{'invisible': [('create_shopify_orders_webhook', '=', False)]}">
                             <div class="o_setting_left_pane">
                                 <field name="customer_order_webhook"
@@ -789,7 +833,8 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-xs-12 col-md-6 o_setting_box" attrs="{'invisible': [('import_buy_with_prime_shopify_order', '=', False)]}">
+                        <div class="col-xs-12 col-md-6 o_setting_box"
+                             attrs="{'invisible': [('import_buy_with_prime_shopify_order', '=', False)]}">
                             <div class="o_setting_right_pane">
                                 <label for="buy_with_prime_warehouse_id" string="Warehouse"/>
                                 <div class="text-muted">
@@ -798,12 +843,14 @@
                                 <div class="content-group">
                                     <div class="mt16">
                                         <field name="buy_with_prime_warehouse_id"
-                                               class="o_light_label" attrs="{'required':[('import_buy_with_prime_shopify_order','!=',False)]}"/>
+                                               class="o_light_label"
+                                               attrs="{'required':[('import_buy_with_prime_shopify_order','!=',False)]}"/>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div class="col-xs-12 col-md-6 o_setting_box" attrs="{'invisible': [('import_buy_with_prime_shopify_order', '=', False)]}">
+                        <div class="col-xs-12 col-md-6 o_setting_box"
+                             attrs="{'invisible': [('import_buy_with_prime_shopify_order', '=', False)]}">
                             <div class="o_setting_right_pane">
                                 <label for="buy_with_prime_tag_ids"/>
                                 <div class="text-muted">
@@ -812,7 +859,8 @@
                                 <div class="content-group">
                                     <div class="mt16">
                                         <field name="buy_with_prime_tag_ids" widget="many2many_tags"
-                                               class="o_light_label" attrs="{'required':[('import_buy_with_prime_shopify_order','!=',False)]}"/>
+                                               class="o_light_label"
+                                               attrs="{'required':[('import_buy_with_prime_shopify_order','!=',False)]}"/>
                                     </div>
                                 </div>
                             </div>

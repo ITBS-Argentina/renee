@@ -276,7 +276,7 @@ class ShopifyProductDataQueue(models.Model):
             image_import_state = 'pending'
         existing_product_data_queue = product_data_queue_line_obj.search(
             [('product_data_id', '=', result.get('id')), ('shopify_instance_id', '=', instance.id),
-             ('state', 'in', ['draft', 'failed'])])
+             ('state', 'in', ['draft', 'failed']), ('product_data_queue_id.is_action_require', '=', False)])
         existing_product_queue = existing_product_data_queue.product_data_queue_id
         product_queue_line_vals = {"product_data_id": result.get("id"),
                                    "shopify_instance_id": instance and instance.id or False,
@@ -355,7 +355,7 @@ class ShopifyProductDataQueue(models.Model):
         @author: Dipak Gogiya on Date 10-Jan-2020.
         """
         product_data_queue = self.search([("created_by", "=", "webhook"), ("state", "=", "draft"),
-                                          ("shopify_instance_id", "=", instance.id)])
+                                          ("shopify_instance_id", "=", instance.id), ('is_action_require', '=', False)])
         if product_data_queue:
             message = "Product %s added into Queue %s." % (product_data.get("id"), product_data_queue.name)
         else:
