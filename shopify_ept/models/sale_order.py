@@ -469,7 +469,7 @@ class SaleOrder(models.Model):
                     sale_order.is_risky_order = True
 
             _logger.info("Starting auto workflow process for Odoo order(%s) and Shopify order is (%s)",
-                         sale_order.name, order_number)
+                         sale_order.id, order_number)
             message = ""
             try:
                 if sale_order.shopify_order_status == "fulfilled":
