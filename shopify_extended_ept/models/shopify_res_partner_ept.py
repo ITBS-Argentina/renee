@@ -23,11 +23,11 @@ class ShopifyResPartnerEpt(models.Model):
 		partner_vals = self.shopify_prepare_partner_vals(shopify_customer_data)
 		address_key_list = ["name", "street", "street2", "city", "zip", "phone", "state_id", "country_id"]
 
-		if company_name:
-			# Added changes here to set company value in vat instead of company_name for task id 42902
+		# Added changes here to set company value in vat instead of company_name for task id 42902
+		if company_name and str(company_name).isdigit():
 			address_key_list.append("vat")
 			partner_vals.update({"vat": company_name})
-			# Changes end here
+		# Changes end here
 
 		partner = partner_obj._find_partner_ept(partner_vals, address_key_list,
 												[("parent_id", "=", parent_partner.id), ("type", "=", partner_type)])
@@ -49,6 +49,7 @@ class ShopifyResPartnerEpt(models.Model):
 			partner_vals.update({'email': parent_partner.email})
 		partner = partner_obj.create(partner_vals)
 		# Added changes here to set company value in vat instead of company_name for task id 42902
-		company_name and partner.write({"vat": company_name})
+		if company_name and str(company_name).isdigit():
+			partner.write({"vat": company_name})
 		# Changes end here
 		return partner
