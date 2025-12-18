@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!-- Server Action to Clean account_payment_group Module Registration -->
+        <record id="action_clean_account_payment_group_module" model="ir.actions.server">
+            <field name="name">Clean account_payment_group Module Registration</field>
+            <field name="model_id" ref="base.model_ir_module_module"/>
+            <field name="state">code</field>
+            <field name="code">
+# Clean account_payment_group module registration from database
+# This removes module metadata but preserves all business data
+
+# Get the module record
+module = env['ir.module.module'].search([('name', '=', 'account_payment_group')], limit=1)
+
+if module:
+    # Remove module dependencies
+    env.cr.execute("DELETE FROM ir_module_module_dependency WHERE module_id = %s OR name = 'account_payment_group'", (module.id,))
+
+    # Remove module exclusions
+    env.cr.execute("DELETE FROM ir_module_module_exclusion WHERE module_id = %s", (module.id,))
+
+    # Reset module state to uninstalled
+    module.write({
+        'state': 'uninstalled',
+        'demo': False,
+        'latest_version': False,
+    })
+
+    # Clear any scheduled upgrades
+    env.cr.execute("UPDATE ir_module_module SET state = 'uninstalled' WHERE name = 'account_payment_group' AND state != 'uninstalled'")
+
+    raise UserError('account_payment_group module registration cleaned successfully. Restart Odoo and install account_payment_group.')
+else:
+    raise UserError('account_payment_group module not found in database')
+            </field>
+        </record>        <!-- Menu item to access the action -->
+        <record id="menu_clean_account_payment_group" model="ir.ui.menu">
+            <field name="name">Clean account_payment_group</field>
+            <field name="parent_id" ref="base.menu_administration"/>
+            <field name="action" ref="action_clean_account_payment_group_module"/>
+            <field name="sequence">100</field>
+        </record>
+
+    </data>
+</odoo>
